@@ -156,18 +156,26 @@ function dockergroup() {
 # Install python                                           #
 ############################################################
 function checkinstallran() {
+	toreturn=0
 	if [ ! -r ~/.pyenv/ ]
 	then
-	    printf "%s\n\033[91;1m.pyenv dir not found in $HOME\n\033[0m"
-	    printf "%s\n\033[91;1mRun ./env_installer.sh install-1\n\033[0m"
-	    return 1
+	    printf "%s\n\033[93;1m${HOME}/.pyenv dir not found\n\033[0m"
+	    printf "%s\n\033[93;1mInstalling pyenv, etc...\n\033[0m"
+	    toreturn=1
+	fi
+	if [ ! -r ~/exrproxy-env/ ]
+	then
+	    printf "%s\n\033[93;1m${HOME}/exrproxy-env/ dir not found\n\033[0m"
+	    printf "%s\n\033[93;1mCloning exrproxy-env repo, etc...\n\033[0m"
+	    toreturn=1
 	fi
 	if ! groups | grep -qw "docker";
 	then
-	    printf "%s\n\033[91;1m$USER is not a member of docker group\n\033[0m"
-	    printf "%s\n\033[91;1mRun ./env_installer.sh install-1\n\033[0m"
-	    return 1
+	    printf "%s\n\033[93;1mUser $USER is not a member of docker group\n\033[0m"
+	    printf "%s\n\033[93;1mAdding user $USER to docker group, etc...\n\033[0m"
+	    toreturn=1
 	fi
+	return $toreturn
 }
 
 ############################################################
@@ -252,11 +260,12 @@ Help()
    printf '%s\n'
    printf "%s\n\033[97;1moptions:"
    printf "%s\n\033[93;1m-h | --help       \033[97;1mPrint this Help."
-   printf "%s\n\033[93;1m--install-1       \033[97;1mInstalls OS dependencies, git, docker,"
+   printf "%s\n\033[93;1m--install         \033[97;1mIf pyenv not installed, exrproxy-env repo not cloned, or user $USER not in docker group:"
+   printf "%s\n\033[93;1m                  \033[97;1mInstalls OS dependencies, git, docker,"
    printf "%s\n\033[93;1m                  \033[97;1mdocker-compose, python3-pip,"
    printf "%s\n\033[93;1m                  \033[97;1mpython3, pyenv, adds user $USER to docker group"
    printf "%s\n\033[93;1m                  \033[97;1mand clones exrproxy-env repo."
-   printf "%s\n\033[93;1m--install-2       \033[97;1mMust be run after this script was run with install-1 option."
+   printf "%s\n\033[93;1m--install         \033[97;1mIf pyenv installed, exrproxy-env repo cloned, and user $USER in docker group:"
    printf "%s\n\033[93;1m                  \033[97;1mSets local pyenv python version"
    printf "%s\n\033[93;1m                  \033[97;1mand installs python dependencies."
    printf '%s\n'
@@ -272,7 +281,7 @@ Help()
 # Process the input options. Add options as needed.        #
 ############################################################
 # Get the options
-VALID_ARGS=$(getopt -o h --long help,install-1,install-2 -- "$@")
+VALID_ARGS=$(getopt -o h --long help,install -- "$@")
 if [[ $? -ne 0 ]]; then
 	exit 1;
 fi
@@ -284,66 +293,61 @@ while [ : ]; do
 		Help
 		shift
 		;;
-	--install-1)
-		# Uninstalling docker & docker compose
-		# printf "%s\n\033[92;1mUninstalling docker & docker-compose\n\033[0m"
-		# uninstalldocker
-		# Installing OS dependencies
-		printf "%s\n\033[92;1mInstalling OS dependencies\n\033[0m"
-		installosdependencies
-
-		# Installing git
-		printf "%s\n\033[92;1mInstalling git\n\033[0m"
-		installgit
-
-		# Install docker & docker compose
-		printf "%s\n\033[92;1mInstalling docker & docker-compose\n\033[0m"
-		checkdocker
-		checkdockercompose
-
-		printf "%s\n\033[92;1mAdding $USER to docker group\n\033[0m"
-		dockergroup
-
-		# Clone repo
-		printf "%s\n\033[92;1mCloning exrproxy-env repo\n\033[0m"
-		clonerepo
-
-		# Installing python3 and python3-pip
-		printf "%s\n\033[92;1mInstalling python3 and python3-pip\n\033[0m"
-		installpython
-
-		printf "%s\n\033[92;1mYou will now be logged out.\n\033[0m"
-		printf "%s\n\033[91;1mAfter logging in again, run './env_installer.sh --install-2'\n\033[0m"
-		printf "%s\n\033[92;1mLogging off in 3 seconds...\n\033[0m"
-		sleep 1
-		printf "%s\n\033[92;1mLogging off in 2 seconds...\n\033[0m"
-		sleep 1
-		printf "%s\n\033[92;1mLogging off in 1 seconds...\n\033[0m"
-		sleep 1
-		kill -9 $PPID
-		printf '%s\n\033[0m'
-		shift
-		;;
-	--install-2)
-		# Confirm ./env_installer.sh --install-1 has been run successfully
+	--install)
 		if ! checkinstallran
 		then
-		    exit
+		    # Uninstalling docker & docker compose
+		    # printf "%s\n\033[92;1mUninstalling docker & docker-compose\n\033[0m"
+		    # uninstalldocker
+		    # Installing OS dependencies
+		    printf "%s\n\033[92;1mInstalling OS dependencies\n\033[0m"
+		    installosdependencies
+		    
+		    # Installing git
+		    printf "%s\n\033[92;1mInstalling git\n\033[0m"
+		    installgit
+		    
+		    # Install docker & docker compose
+		    printf "%s\n\033[92;1mInstalling docker & docker-compose\n\033[0m"
+		    checkdocker
+		    checkdockercompose
+		    
+		    printf "%s\n\033[92;1mAdding $USER to docker group\n\033[0m"
+		    dockergroup
+		    
+		    # Clone repo
+		    printf "%s\n\033[92;1mCloning exrproxy-env repo\n\033[0m"
+		    clonerepo
+		    
+		    # Installing python3 and python3-pip
+		    printf "%s\n\033[92;1mInstalling python3 and python3-pip\n\033[0m"
+		    installpython
+		    
+		    printf "%s\n\033[92;1mYou will now be logged out.\n\033[0m"
+		    printf "%s\n\033[91;1mAfter logging in again, run './env_installer.sh --install-2'\n\033[0m"
+		    printf "%s\n\033[92;1mLogging off in 3 seconds...\n\033[0m"
+		    sleep 1
+		    printf "%s\n\033[92;1mLogging off in 2 seconds...\n\033[0m"
+		    sleep 1
+		    printf "%s\n\033[92;1mLogging off in 1 seconds...\n\033[0m"
+		    sleep 1
+		    kill -9 $PPID
+		    printf '%s\n\033[0m'
+		else
+		    # cd to $location in preparation for calling the next 2 functions
+		    cd $location
+		    
+		    # Set python pyenv local version
+		    printf "%s\n\033[92;1mSetting local python version in $location to $pyversion \n\033[0m"
+		    setpyenvlocal
+		    
+		    # Install python requirements
+		    printf "%s\n\033[92;1mInstalling python3 requirements\n\033[0m"
+		    installpythonrequirements
+		    # Removing this script
+		    #		printf "%s\n\033[91;1mRemoving this script\n\033[0m"
+		    #		sudo rm -- "$0"
 		fi
-		
-		# cd to $location in preparation for calling the next 2 functions
-		cd $location
-
-		# Set python pyenv local version
-		printf "%s\n\033[92;1mSetting local python version in $location to $pyversion \n\033[0m"
-		setpyenvlocal
-
-		# Install python requirements
-		printf "%s\n\033[92;1mInstalling python3 requirements\n\033[0m"
-		installpythonrequirements
-		# Removing this script
-#		printf "%s\n\033[91;1mRemoving this script\n\033[0m"
-#		sudo rm -- "$0"
 		shift
 		;;
 	--)
