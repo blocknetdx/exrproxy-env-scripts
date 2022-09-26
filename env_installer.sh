@@ -324,7 +324,7 @@ while [ : ]; do
 		    installpython
 		    
 		    printf "%s\n\033[92;1mYou will now be logged out.\n\033[0m"
-		    printf "%s\n\033[91;1mAfter logging in again, run './env_installer.sh --install-2'\n\033[0m"
+		    printf "%s\n\033[91;1mAfter logging in again, run './env_installer.sh --install'\n\033[0m"
 		    printf "%s\n\033[92;1mLogging off in 3 seconds...\n\033[0m"
 		    sleep 1
 		    printf "%s\n\033[92;1mLogging off in 2 seconds...\n\033[0m"
