@@ -160,7 +160,7 @@ function dockergroup() {
 }
 
 ############################################################
-# Check if script as already installed                     #
+# Check if script was already installed                    #
 ############################################################
 function checkinstallran() {
 	toreturn=0
