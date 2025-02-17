@@ -22,30 +22,59 @@ fi
 ############################################################
 function installosdependencies() {
 	sudo $PKM update -y
-	sudo $PKM install -y libz-dev libssl-dev libcurl4-gnutls-dev libexpat1-dev gettext cmake gcc grep gawk make build-essential zlib1g-dev libbz2-dev libreadline-dev libsqlite3-dev wget curl llvm libncursesw5-dev xz-utils tk-dev libxml2-dev libxmlsec1-dev libffi-dev liblzma-dev python3-pip
+  sudo $PKM install -y make build-essential libssl-dev zlib1g-dev libbz2-dev libreadline-dev libsqlite3-dev wget curl llvm libncursesw5-dev xz-utils tk-dev libxml2-dev libxmlsec1-dev libffi-dev liblzma-dev
 }
 
 ############################################################
 # Check Docker Engine                                      #
 ############################################################
 function checkdocker() {
-	dockerversion="20.10.13"
-	DOCKER=$(which docker)
-	if grep -q "/" <<< "$DOCKER"; then
-		printf "%s\n\033[92;1mDocker found\033[0m"
-		DOCKER_VERSION=$(docker --version | awk '{print $3}')
-		DOCKER_VERSION={{$DOCKER_VERSION::-1}}
-		if [ "$(printf '%s\n' "$dockerversion" "$DOCKER_VERSION" | sort --version-sort | head -n1)" = "$dockerversion" ]; then 
-			printf "%s\n\033[92;1mGreater than or equal to ${dockerversion}\033[0m\n"
-		else
-			printf "%s\n\033[91;1mLess than ${dockerversion}. You have to upgrade\033[0m\n"
-		fi
-	else
-		printf "%s\n\033[91;1mDocker not found\033[0m\n"
-		printf "%s\n\033[92;1mInstalling Docker\033[0m\n"
-		installdocker
-	fi
+  dockerversion="20.10.13"
+
+  if ! command -v docker &> /dev/null; then
+    printf "%s\n\033[91;1mDocker not found\033[0m\n"
+    printf "%s\n\033[92;1mInstalling Docker\033[0m\n"
+    installdocker
+  else
+    docker_version=$(docker --version | awk '{print $3}' | sed 's/,$//')
+    
+    if [ "$(printf '%s\n' "$dockerversion" "$docker_version" | sort -V | head -n1)" = "$dockerversion" ]; then
+      printf "%s\n\033[92;1mDocker found and version is greater than or equal to ${dockerversion}\033[0m\n"
+    else
+      printf "%s\n\033[91;1mLess than ${dockerversion}. You have to upgrade.\033[0m\n"
+    fi
+  fi
 }
+
+############################################################
+# Install Docker                                           #
+############################################################
+function installdocker() {
+    sudo $PKM update -y
+    sudo $PKM upgrade -y
+
+	# Add Docker's official GPG key:
+	sudo apt-get install ca-certificates curl
+	sudo install -m 0755 -d /etc/apt/keyrings
+	sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+	sudo chmod a+r /etc/apt/keyrings/docker.asc
+
+	# Add the repository to Apt sources:
+	echo \
+	"deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \
+	$(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}") stable" | \
+	sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+	sudo apt-get update
+
+    # Install Docker Engine
+    # sudo $PKM update -y
+    sudo $PKM install -y docker-ce docker-ce-cli containerd.io
+
+    # Verify Docker installation
+    sudo docker --version
+}
+
 
 ############################################################
 # Check Docker Compose                                     #
@@ -67,6 +96,21 @@ function checkdockercompose() {
 		installdockercompose
 	fi
 }
+
+
+############################################################
+# Install Docker Compose                                   #
+############################################################
+function installdockercompose() {
+	# Find newest version
+	VERSION=$(curl --silent https://api.github.com/repos/docker/compose/releases/latest | grep -Po '"tag_name": "\K.*\d')
+	DESTINATION=/usr/bin/docker-compose
+	# Download to DESTINATION
+	sudo curl -L https://github.com/docker/compose/releases/download/${VERSION}/docker-compose-$(uname -s)-$(uname -m) -o $DESTINATION
+	# Add permissions 
+	sudo chmod 755 $DESTINATION
+}
+
 
 ############################################################
 # Uninstall Docker                                         #
@@ -104,45 +148,7 @@ function checkdockercompose() {
 #   sudo rm /usr/share/keyrings/docker-archive-keyring.gpg
 # }
 
-############################################################
-# Install Docker                                           #
-############################################################
-function installdocker() {
-	# Install requirements
-	sudo $PKM update -y
-	sudo $PKM upgrade -y
-	sudo $PKM install -y \
-		apt-transport-https \
-		ca-certificates \
-		curl \
-		gnupg-agent \
-		lsb-release \
-		software-properties-common
 
-	# Add Docker’s official GPG key
-	curl curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-	sudo $PKM-key fingerprint 0EBFCD88
-	# Set up the stable repository
-	sudo printf \
-		"deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu \
-		$(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-	# Install Docker Engine
-	sudo $PKM update -y
-	sudo $PKM install -y docker-ce docker-ce-cli containerd.io
-}
-
-############################################################
-# Install Docker Compose                                   #
-############################################################
-function installdockercompose() {
-	# Find newest version
-	VERSION=$(curl --silent https://api.github.com/repos/docker/compose/releases/latest | grep -Po '"tag_name": "\K.*\d')
-	DESTINATION=/usr/bin/docker-compose
-	# Download to DESTINATION
-	sudo curl -L https://github.com/docker/compose/releases/download/${VERSION}/docker-compose-$(uname -s)-$(uname -m) -o $DESTINATION
-	# Add permissions 
-	sudo chmod 755 $DESTINATION
-}
 
 ############################################################
 # Docker as non-root user                                  #
@@ -150,10 +156,11 @@ function installdockercompose() {
 function dockergroup() {
 	sudo groupadd docker
 	sudo usermod -aG docker $USER
+	sudo systemctl restart docker
 }
 
 ############################################################
-# Install python                                           #
+# Check if script as already installed                     #
 ############################################################
 function checkinstallran() {
 	toreturn=0
@@ -181,29 +188,57 @@ function checkinstallran() {
 ############################################################
 # Install python                                           #
 ############################################################
-function installpython() {
-	if [ ! -r ~/.pyenv/ ]
-	then
-	    git clone https://github.com/pyenv/pyenv.git ~/.pyenv
-	    git clone https://github.com/pyenv/pyenv-virtualenv.git ~/.pyenv/plugins/pyenv-virtualenv
-	    echo '
-# pyenv
-export PYENV_ROOT="$HOME/.pyenv"
-export PATH="$PYENV_ROOT/bin:$PATH"
-if command -v pyenv 1>/dev/null 2>&1; then
-    eval "$(pyenv init -)"
-    eval "$(pyenv virtualenv-init -)" # Enable auto-activation of virtualenvs
-fi'	    >> ~/.bashrc
-	fi
+function installpyenv() {
+  # Ensure git is installed
+  if [ ! -r ~/.pyenv/ ]
+  then
+      git clone https://github.com/pyenv/pyenv.git ~/.pyenv
+      git clone https://github.com/pyenv/pyenv-virtualenv.git ~/.pyenv/plugins/pyenv-virtualenv
+      echo '
+  # pyenv
+  export PYENV_ROOT="$HOME/.pyenv"
+  export PATH="$PYENV_ROOT/bin:$PATH"
+  if command -v pyenv 1>/dev/null 2>&1; then
+      eval "$(pyenv init -)"
+      eval "$(pyenv virtualenv-init -)" # Enable auto-activation of virtualenvs
+  fi' >> ~/.bashrc
+      source ~/.bashrc
+      
+      # Directly set pyenv environment variables in the script
+      export PYENV_ROOT="$HOME/.pyenv"
+      export PATH="$PYENV_ROOT/bin:$PATH"
+
+      # Initialize pyenv and pyenv-virtualenv within the script
+      echo "Initializing pyenv..."
+      if command -v pyenv 1>/dev/null 2>&1; then
+        eval "$(pyenv init -)"
+        eval "$(pyenv virtualenv-init -)"
+      else
+        echo "pyenv not found after installation!"
+        exit 1
+      fi
+
+  fi
 }
+
 
 ############################################################
 # Set python pyenv local version                           #
 ############################################################
 function setpyenvlocal() {
-	# Assumes $PWD is $location
-	pyenv install $pyversion
-	pyenv local $pyversion
+    # Assumes $PWD is $location
+    pyenv install -s $pyversion
+    pyenv local $pyversion
+
+    # Check if the python version matches the desired one
+    installed_version=$(python --version 2>&1 | awk '{print $2}')
+
+    if [[ "$installed_version" != "$pyversion" ]]; then
+        echo "Error: Expected Python version $pyversion, but got $installed_version."
+        exit 1  # Exit the script if the version doesn't match
+    else
+        echo "Python version $installed_version is correctly set."
+    fi
 }
 
 ############################################################
@@ -211,19 +246,7 @@ function setpyenvlocal() {
 ############################################################
 function installpythonrequirements() {
 	# Assumes $PWD is $location
-	pip3 install -r requirements.txt
-
-	# Fix prompt_toolkit/styles/from_dict.py lib if it's broken
-	pkgs=$(python3 -m site | awk -F"'" '/site-packages/{print $2; exit}')
-	echo "Searching $pkgs for broken lib file..."
-	broken_lib=${pkgs}/prompt_toolkit/styles/from_dict.py
-	if grep -q "from collections import Mapping" ${broken_lib}; then
-		echo "prompt_toolkit/styles/from_dict.py contains broken lib ref; fixing it..."
-		cp ${broken_lib} ${broken_lib}.bak
-		awk '/from collections import Mapping/{gsub(/collections/, "collections.abc")};{print}' ${broken_lib}.bak > ${broken_lib}
-	else
-		echo "prompt_toolkit/styles/from_dict.py doesn't exist or isn't broken; skipping fixing it..."
-	fi
+	pip install -r requirements.txt
 }
 
 ############################################################
@@ -247,6 +270,27 @@ function clonerepo() {
 		git clone https://github.com/blocknetdx/exrproxy-env.git $location
 		# git clone -b dev-autobuilder-pom https://github.com/blocknetdx/exrproxy-env.git $location
 	fi
+}
+
+############################################################
+# Logout user                                              #
+############################################################
+logout_user() {
+  echo -e "\033[92;1mEnv install completed, You will now be logged out.\033[0m"
+
+  # print a countdown to inform user
+  for i in {5..1}; do
+    echo -e "\033[92;1mLogging off in $i seconds...\033[0m"
+    sleep 1
+  done
+
+  # Cleanly log out the user if running in an interactive shell
+  if [ -n "$PS1" ]; then
+    logout
+  else
+    # If not an interactive shell, force kill the parent process (may be risky!)
+    kill -9 $PPID
+  fi
 }
 
 ############################################################
@@ -289,74 +333,60 @@ fi
 eval set -- "$VALID_ARGS"
 while [ : ]; do
   case "$1" in
-	-h | --help)
-		Help
-		shift
-		;;
-	--install)
-		if ! checkinstallran
-		then
-		    # Uninstalling docker & docker compose
-		    # printf "%s\n\033[92;1mUninstalling docker & docker-compose\n\033[0m"
-		    # uninstalldocker
-		    # Installing OS dependencies
-		    printf "%s\n\033[92;1mInstalling OS dependencies\n\033[0m"
-		    installosdependencies
-		    
-		    # Installing git
-		    printf "%s\n\033[92;1mInstalling git\n\033[0m"
-		    installgit
-		    
-		    # Install docker & docker compose
-		    printf "%s\n\033[92;1mInstalling docker & docker-compose\n\033[0m"
-		    checkdocker
-		    checkdockercompose
-		    
-		    printf "%s\n\033[92;1mAdding $USER to docker group\n\033[0m"
-		    dockergroup
-		    
-		    # Clone repo
-		    printf "%s\n\033[92;1mCloning exrproxy-env repo\n\033[0m"
-		    clonerepo
-		    
-		    # Installing python3 and python3-pip
-		    printf "%s\n\033[92;1mInstalling python3 and python3-pip\n\033[0m"
-		    installpython
-		    
-		    printf "%s\n\033[92;1mYou will now be logged out.\n\033[0m"
-		    printf "%s\n\033[91;1mAfter logging in again, run './env_installer.sh --install'\n\033[0m"
-		    printf "%s\n\033[92;1mLogging off in 5 seconds...\n\033[0m"
-		    sleep 1
-		    printf "%s\n\033[92;1mLogging off in 4 seconds...\n\033[0m"
-		    sleep 1
-		    printf "%s\n\033[92;1mLogging off in 3 seconds...\n\033[0m"
-		    sleep 1
-		    printf "%s\n\033[92;1mLogging off in 2 seconds...\n\033[0m"
-		    sleep 1
-		    printf "%s\n\033[92;1mLogging off in 1 seconds...\n\033[0m"
-		    sleep 1
-		    kill -9 $PPID
-		    printf '%s\n\033[0m'
-		else
-		    # cd to $location in preparation for calling the next 2 functions
-		    cd $location
-		    
-		    # Set python pyenv local version
-		    printf "%s\n\033[92;1mSetting local python version in $location to $pyversion \n\033[0m"
-		    setpyenvlocal
-		    
-		    # Install python requirements
-		    printf "%s\n\033[92;1mInstalling python3 requirements\n\033[0m"
-		    installpythonrequirements
-		    # Removing this script
-		    #		printf "%s\n\033[91;1mRemoving this script\n\033[0m"
-		    #		sudo rm -- "$0"
-		fi
-		shift
-		;;
-	--)
-		shift; 
-		break 
-		;;
+    -h | --help)
+      Help
+      shift
+      ;;
+    -i | --install)
+      # Installing OS dependencies
+      printf "%s\n\033[92;1mInstalling OS dependencies\n\033[0m"
+      installosdependencies
+      
+      # Installing git
+      printf "%s\n\033[92;1mInstalling git\n\033[0m"
+      installgit
+      
+      # Install docker & docker-compose
+      printf "%s\n\033[92;1mInstalling docker & docker-compose\n\033[0m"
+      checkdocker
+      checkdockercompose
+      
+      # Adding $USER to docker group
+      printf "%s\n\033[92;1mAdding $USER to docker group\n\033[0m"
+      dockergroup
+      
+      # Clone repo
+      printf "%s\n\033[92;1mCloning exrproxy-env repo\n\033[0m"
+      clonerepo
+      
+
+      printf "%s\n\033[92;1mInstalling pyenv\n\033[0m"
+      installpyenv
+
+      cd "$location" || exit
+      
+      # Set python pyenv local version
+      printf "%s\n\033[92;1mSetting local python version in $location to $pyversion \n\033[0m"
+      setpyenvlocal
+      
+      # Install python requirements
+      printf "%s\n\033[92;1mInstalling python3 requirements\n\033[0m"
+      installpythonrequirements
+
+      # Logout
+      logout_user
+ 
+      shift
+      ;;
+    
+    --)
+      shift
+      break
+      ;;
+    
+    *)
+      echo "Unknown option: $1"
+      shift
+      ;;
   esac
 done
